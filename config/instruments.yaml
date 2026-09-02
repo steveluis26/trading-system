@@ -1,0 +1,67 @@
+# Instrument Specifications - Especificaciones por símbolo
+# Usado por backtester, executor, risk engine para cálculos exactos
+
+instruments:
+  XAUUSD:
+    name: "Gold vs US Dollar"
+    pip_size: 0.01              # 1 pip = 0.01 (2 decimales)
+    pip_value_per_lot: 1.0      # $1 por pip por 0.01 lote (estándar broker)
+    contract_size: 100          # 1 lote = 100 onzas
+    lot_step: 0.01              # Incremento mínimo de lote
+    min_lot: 0.01
+    max_lot: 100.0
+    swap_long: -2.5             # Swap puntos (aprox, actualizar del broker)
+    swap_short: 0.5
+    spread_typical_pips: 30     # Spread típico ~30 pips (0.30)
+    margin_currency: "USD"
+    digits: 2
+    category: "metal"
+  
+  EURUSD:
+    name: "Euro vs US Dollar"
+    pip_size: 0.0001            # 1 pip = 0.0001 (5 decimales, pipette en 5to)
+    pip_value_per_lot: 10.0     # $10 por pip por 1.0 lote estándar
+    contract_size: 100000       # 1 lote = 100,000 EUR
+    lot_step: 0.01
+    min_lot: 0.01
+    max_lot: 100.0
+    swap_long: -1.5
+    swap_short: 0.3
+    spread_typical_pips: 1.5    # Spread típico ~1.5 pips
+    margin_currency: "USD"
+    digits: 5
+    category: "forex_major"
+  
+  GBPUSD:
+    name: "British Pound vs US Dollar"
+    pip_size: 0.0001
+    pip_value_per_lot: 10.0
+    contract_size: 100000
+    lot_step: 0.01
+    min_lot: 0.01
+    max_lot: 100.0
+    swap_long: -2.0
+    swap_short: 0.5
+    spread_typical_pips: 2.0
+    margin_currency: "USD"
+    digits: 5
+    category: "forex_major"
+
+# Configuración de redondeo y precisión
+rounding:
+  price_digits: 5               # Redondeo precios a 5 decimales (forex) / 2 (metales)
+  lot_digits: 2                 # Lotes a 2 decimales
+  pnl_digits: 2                 # P&L a 2 decimales (USD)
+
+# Conversión de pips a precio por símbolo
+pip_to_price:
+  XAUUSD: 0.01
+  EURUSD: 0.0001
+  GBPUSD: 0.0001
+
+# Valor de 1 pip en USD por lote estándar (1.0)
+# Para lotes fraccionarios: valor = pip_value_per_lot × (lote / 1.0)
+pip_value_usd_per_standard_lot:
+  XAUUSD: 100.0    # 1.0 lote = $100/pip (0.01 lote = $1/pip)
+  EURUSD: 10.0     # 1.0 lote = $10/pip
+  GBPUSD: 10.0     # 1.0 lote = $10/pip

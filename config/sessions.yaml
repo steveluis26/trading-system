@@ -1,0 +1,65 @@
+# Session Hours Configuration - Zona Horaria México (America/Mexico_City)
+# Usado por backtester y executor para calcular High/Low de cada sesión
+# DST: México usa horario de verano (UTC-5) típicamente abril-octubre
+
+timezone: "America/Mexico_City"
+
+sessions:
+  ASIA:
+    name: "Sesión Asia"
+    start_hour: 18
+    start_minute: 0
+    end_hour: 3
+    end_minute: 0
+    crosses_midnight: true
+    description: "18:00-03:00 (día anterior → día actual)"
+    # En tiempo México: abre 18:00 día D-1, cierra 03:00 día D
+  
+  LONDON:
+    name: "Sesión Londres"
+    start_hour: 2
+    start_minute: 0
+    end_hour: 11
+    end_minute: 0
+    crosses_midnight: false
+    description: "02:00-11:00 (mismo día)"
+    # En tiempo México: abre 02:00, cierra 11:00
+  
+  NEWYORK:
+    name: "Sesión Nueva York"
+    start_hour: 7
+    start_minute: 0
+    end_hour: 16
+    end_minute: 0
+    crosses_midnight: false
+    description: "07:00-16:00 (mismo día)"
+    # En tiempo México: abre 07:00, cierra 16:00
+
+# Tolerancia para detectar confluencia entre niveles de sesión (en pips)
+confluence_tolerance_pips:
+  XAUUSD: 100    # 100 pips = $100 en oro (100 pips × $1/pip por 0.01 lote)
+  EURUSD: 10     # 10 pips
+  GBPUSD: 10     # 10 pips
+
+# Configuración de visualización (para dashboard/Telegram)
+visualization:
+  show_session_boxes: true
+  show_confluence_zones: true
+  zone_opacity: 0.15
+  colors:
+    ASIA: "#9b59b6"      # Púrpura
+    LONDON: "#3498db"    # Azul
+    NEWYORK: "#e74c3c"   # Rojo
+    CONFLUENCE: "#f39c12" # Naranja/ámbar
+    CONFLUENCE_STRONG_3: "#e67e22" # Naranja oscuro (3 sesiones)
+
+# Días festivos 2024-2025 (México y US) - opcional para filtro de noticias
+# Se puede cargar desde calendario económico externo
+holidays_calendar: "external"  # "external" | "static" | "none"
+
+# Notas de implementación:
+# 1. Convertir timestamp del broker (MT5 server time) a America/Mexico_City usando zoneinfo/pytz
+# 2. Para sesiones que cruzan medianoche (ASIA), el día de la sesión = día de CIERRE (03:00)
+#    Ejemplo: ASIA del 2024-01-15 = velas desde 2024-01-14 18:00 hasta 2024-01-15 03:00
+# 3. LONDON y NEWYORK usan el día natural (inicio y fin mismo día)
+# 4. DST se maneja automáticamente con zoneinfo("America/Mexico_City")
