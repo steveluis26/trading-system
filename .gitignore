@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data
+data/raw/*.csv
+data/cache/*.json
+!data/raw/.gitkeep
+!data/cache/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+backend_aaces.log
+
+# Temporary files
+*.pyc
+*_diag*.py
+_verify_*.py
+_t*.py
+
+# Dashboard frontend (has its own git)
+dashboard/web/node_modules/
+dashboard/web/.next/
+dashboard/web/out/
+dashboard/web/build/
