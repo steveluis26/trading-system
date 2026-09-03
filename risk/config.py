@@ -51,28 +51,35 @@ class RiskConfig:
         with open(path) as f:
             d = yaml.safe_load(f)
         c = RiskConfig()
-        c.lots_per_1000_capital = d.get("lots_per_1000_capital", c.lots_per_1000_capital)
+        ls = d.get("lot_sizing", {})
+        c.lots_per_1000_capital = ls.get("lots_per_1000_capital", d.get("lots_per_1000_capital", c.lots_per_1000_capital))
+        lim = d.get("limits", {})
         c.max_risk_per_trade_pct_softcap = d.get("max_risk_per_trade_pct_softcap", c.max_risk_per_trade_pct_softcap)
-        op = d.get("max_open_positions", c.max_open_positions)
+        op = lim.get("max_concurrent_trades", d.get("max_open_positions", c.max_open_positions))
         c.max_open_positions = op
-        c.max_positions_per_symbol = d.get("max_positions_per_symbol", c.max_positions_per_symbol)
-        c.max_operations_per_day = d.get("max_operations_per_day", c.max_operations_per_day)
-        c.max_daily_loss_pct = d.get("max_daily_loss_pct", c.max_daily_loss_pct)
-        c.kill_switch_dd_pct = d.get("kill_switch_dd_pct", c.kill_switch_dd_pct)
-        c.max_consecutive_losses = d.get("max_consecutive_losses", c.max_consecutive_losses)
+        c.max_positions_per_symbol = lim.get("max_positions_per_symbol", d.get("max_positions_per_symbol", c.max_positions_per_symbol))
+        c.max_operations_per_day = lim.get("max_daily_trades", d.get("max_operations_per_day", c.max_operations_per_day))
+        c.max_daily_loss_pct = lim.get("daily_loss_limit_pct", d.get("max_daily_loss_pct", c.max_daily_loss_pct))
+        c.kill_switch_dd_pct = lim.get("monthly_loss_limit_pct", d.get("kill_switch_dd_pct", lim.get("monthly_loss_limit_pct", c.kill_switch_dd_pct)))
+        c.max_consecutive_losses = lim.get("max_consecutive_losses", d.get("max_consecutive_losses", c.max_consecutive_losses))
         c.reentry_same_zone = d.get("reentry_same_zone", c.reentry_same_zone)
 
-        s = d.get("sessions", {})
-        c.session_london = tuple(s.get("london", list(c.session_london)))
-        c.session_newyork = tuple(s.get("newyork", list(c.session_newyork)))
-        c.no_trade_weekday = d.get("no_trade_weekday", c.no_trade_weekday)
-        c.no_hold_over_weekend = d.get("no_hold_over_weekend", c.no_hold_over_weekend)
+        s = d.get("session_filters", d.get("sessions", {}))
+        if "london" in s:
+            c.session_london = tuple(s.get("london", list(c.session_london)))
+        if "newyork" in s:
+            c.session_newyork = tuple(s.get("newyork", list(c.session_newyork)))
+        c.no_trade_weekday = d.get("no_trade_weekday", 4 if d.get("session_filters", {}).get("avoid_friday_afternoon") else c.no_trade_weekday)
+        c.no_hold_over_weekend = d.get("no_hold_over_weekend", True if d.get("session_filters", {}).get("avoid_weekends") else c.no_hold_over_weekend)
         c.news_filter = bool(d.get("news_filter")) and str(d.get("news_filter")) not in ("false", "no")
+        if d.get("session_filters", {}).get("avoid_high_impact_usd_news"):
+            c.news_filter = True
 
-        be = d.get("breakeven_partial", {})
-        c.be_trigger_pct_to_tp = be.get("trigger_pct_to_tp", c.be_trigger_pct_to_tp)
+        be = d.get("breakeven", d.get("breakeven_partial", {}))
+        c.be_trigger_pct_to_tp = be.get("trigger_pct_of_tp", be.get("trigger_pct_to_tp", c.be_trigger_pct_to_tp))
         c.be_close_fraction = be.get("close_fraction", c.be_close_fraction)
-        c.rr_target = d.get("rr_target", c.rr_target)
+        rr = d.get("risk_reward", {})
+        c.rr_target = [rr.get("ratio", c.rr_target[0])] if "ratio" in rr else d.get("rr_target", c.rr_target)
 
         co = d.get("costs", {})
         c.spread_points = co.get("spread_points", {})

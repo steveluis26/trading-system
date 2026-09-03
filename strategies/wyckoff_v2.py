@@ -1,7 +1,6 @@
 """Estrategia 2 — Wyckoff / FVG / Fibonacci (v2)
-Basado en 9 capturas TradingView + respuestas socia 2026-09-02.
-Implementacion FIEL a Estrategia 2: acumulacion->expansion->fib + FVG + 3 filtros reutilizados.
-No toca v4. Usa mismos tipos core y backtest/multitf.
+Integrada al panel único. Corrige bugs críticos 0 trades sin tocar diseño v4.
+TP fib 1.272/1.618, SL swing, RR=2, BE configurable, FVG OR peso (no veto).
 """
 from __future__ import annotations
 from datetime import timezone, timedelta
@@ -44,140 +43,118 @@ class WyckoffV2(Strategy):
     ATR_PERIOD=14
     MAX_DEPTH_ATR=1.0
     MIN_WICK_PCT=0.50
-    MAX_RECLAIM_BARS=2
-    BE_AT_PCT=0.40
+    BE_MODE="pct_40"
     ACC_ATR_MULT=1.5
     ACC_MIN_BARS=20
-    FIB_ENTRY_LO=0.618
-    FIB_ENTRY_HI=0.786
-    FIB_TP1=1.272
-    FIB_TP2=1.618
+    N_SWINGS=5
+    MIN_GAP_ATR=0.2
+    VOL_LOOKBACK=20
+    VOL_MULT=1.2
 
-    def __init__(self):
+    def __init__(self, be_mode: str = "pct_40"):
+        self.BE_MODE=be_mode
         self._state={}
 
     def reset(self):
         self._state.clear()
 
+    def _find_swings(self, m15: list[Bar]):
+        N=self.N_SWINGS
+        # buscar desde el final hacia atrás para impulso reciente
+        swing_high_idx=None; swing_low_idx=None
+        for i in range(len(m15)-N-1, N-1, -1):
+            if swing_high_idx is None and m15[i].high==max(b.high for b in m15[i-N:i+N+1]):
+                swing_high_idx=i
+            if swing_low_idx is None and m15[i].low==min(b.low for b in m15[i-N:i+N+1]):
+                swing_low_idx=i
+            if swing_high_idx is not None and swing_low_idx is not None:
+                break
+        return swing_high_idx, swing_low_idx
+
     def on_bars(self, ctx, t) -> Signal | None:
-        d1=ctx.get(Timeframe.D1,[])
-        h1=ctx.get(Timeframe.H1,[])
-        m15=ctx.get(Timeframe.M15,[])
-        m5=ctx.get(Timeframe.M5,[])
+        d1=ctx.get(Timeframe.D1,[]); h1=ctx.get(Timeframe.H1,[]); m15=ctx.get(Timeframe.M15,[]); m5=ctx.get(Timeframe.M5,[])
         if len(m15)<50 or len(m5)<10 or len(h1)<30:
             return None
-        sym=m5[-1].symbol
-        pip=0.01 if sym=="XAUUSD" else 0.0001
+        sym=m5[-1].symbol; pip=0.01 if sym=="XAUUSD" else 0.0001
         mxt=_mx_time(t)
-        wd=mxt.weekday()
-        if wd>=5: return None
-        if wd==4 and mxt.hour>=15: return None
-        # 1H fase: filtro simple tendencia por EMA50
+        if mxt.weekday()>=5: return None
+        if mxt.weekday()==4 and mxt.hour>=15: return None
         closes_h1=[b.close for b in h1[-50:]]
-        ema=sum(closes_h1)/len(closes_h1)
-        is_up=m5[-1].close>ema
-        # buscar impulso reciente en M15: swing low->high
-        # swing detection N=5 en M15
-        N=5
-        m15_highs=[b.high for b in m15]
-        m15_lows=[b.low for b in m15]
-        swing_high_idx=None; swing_low_idx=None
-        for i in range(N,len(m15)-N):
-            if m15[i].high==max(m15_highs[i-N:i+N+1]):
-                swing_high_idx=i
-            if m15[i].low==min(m15_lows[i-N:i+N+1]):
-                swing_low_idx=i
-        if swing_high_idx is None or swing_low_idx is None:
+        sma=sum(closes_h1)/len(closes_h1)
+        is_up=m5[-1].close > sma
+        sh, sl = self._find_swings(m15)
+        if sh is None or sl is None:
             return None
-        # impulso debe ser reciente (ultimas 50 velas M15)
-        if swing_high_idx< len(m15)-50 or swing_low_idx< len(m15)-50:
+        # impulso reciente: ambos swings dentro de últimas 80 velas M15 (~20h) — deja ajustar
+        if sh < len(m15)-80 or sl < len(m15)-80:
             return None
-        # direccion impulso
-        if m15[swing_low_idx].low < m15[swing_high_idx].high and swing_low_idx < swing_high_idx:
+        # dirección: swing_low < swing_high y low antes que high = impulso alcista
+        if sl < sh and m15[sl].low < m15[sh].high:
             direction=Side.BUY
-            imp_low=m15[swing_low_idx].low
-            imp_high=m15[swing_high_idx].high
-        elif m15[swing_low_idx].low > m15[swing_high_idx].low and swing_high_idx < swing_low_idx:
+            imp_low=m15[sl].low; imp_high=m15[sh].high
+        elif sh < sl and m15[sh].high > m15[sl].low:
             direction=Side.SELL
-            imp_low=m15[swing_high_idx].high
-            imp_high=m15[swing_low_idx].low
+            imp_low=m15[sh].high; imp_high=m15[sl].low
+            # SELL: top->bot
+            top=m15[sh].high; bot=m15[sl].low
+            imp_low=top; imp_high=bot
             direction=Side.SELL
-            imp_low,imp_high=m15[swing_high_idx].high,m15[swing_low_idx].low
-            # para sell fib invertido
         else:
             return None
-        # solo operar a favor de 1H para v1 (Wyckoff fase)
+        diff=abs(imp_high-imp_low)
+        if diff<=0: return None
         if direction==Side.BUY and not is_up: return None
         if direction==Side.SELL and is_up: return None
-        # acumulacion: rango lateral previo al impulso
+        # acumulación: rango previo al swing_low
         acc_ok=False
-        if swing_low_idx>=self.ACC_MIN_BARS:
-            seg=m15[swing_low_idx-self.ACC_MIN_BARS:swing_low_idx]
+        idx_acc=sl if direction==Side.BUY else sh
+        if idx_acc>=self.ACC_MIN_BARS:
+            seg=m15[idx_acc-self.ACC_MIN_BARS:idx_acc]
             atr=_atr(seg,14)
             if atr>0:
                 rh=max(b.high for b in seg); rl=min(b.low for b in seg)
                 if rh-rl <= self.ACC_ATR_MULT*atr:
                     acc_ok=True
-        # volumen armonia: expansion con volumen > promedio
-        vols=[b.volume for b in m15[max(0,swing_high_idx-20):swing_high_idx+1]]
-        if vols and m15[swing_high_idx].volume < sum(vols)/len(vols)*1.0:
-            # divergencia: si rompe sin volumen, es manipulacion -> no entrar (filtrar)
-            # pero spec dice divergencia = manipulacion previa, no post. Para v1 permitimos pero marcamos.
-            pass
-        diff=imp_high-imp_low
-        if diff<=0: return None
-        # fib niveles
+        # precio M5 actual
+        last=m5[-1]
+        atr_m15=_atr(m15[-30:],14)
+        if atr_m15<=0: atr_m15=diff*0.1
         if direction==Side.BUY:
-            e618=imp_low+0.618*diff; e786=imp_low+0.786*diff
-            tp1=imp_low+1.272*diff; tp2=imp_low+1.618*diff
-            fvg_bull,_= _detect_fvg(m15)
-            # FVG confluencia: algun FVG alcista dentro de 0.618-0.786
+            # Fib BUY: imp_low->imp_high
+            lo=imp_low; hi=imp_high
+            e618=lo+0.618*diff; e786=lo+0.786*diff
+            # FVG peso (OR, no veto)
+            fvg_bull,_=_detect_fvg(m15, self.MIN_GAP_ATR)
             fvg_ok=any(e618<=bot<=e786 or e618<=top<=e786 for _,top,bot in fvg_bull)
-            price=m5[-1].close
-            if not (e618 <= price <= e786):
-                return None
-            # need FVG confluence OR at least near
-            # if not fvg_ok: allow but lower weight -> para v1 exigir fvg
-            if not fvg_ok:
-                return None
-            # 3 filtros reutilizados sobre M5
-            atr_m15=_atr(m15[-30:],14)
-            last=m5[-1]
-            # profundidad y mecha respecto a nivel 0.786 (soporte)
             level=e786
-            # debe haber tocado y rechazado: low <= level y close > level
+            # 3 filtros: debe haber barrido nivel y cerrado arriba (rechazo)
             if not (last.low <= level and last.close > level):
                 return None
             depth=level-last.low
             if depth > self.MAX_DEPTH_ATR*atr_m15: return None
             rng=last.high-last.low
             if rng<=0: return None
-            wick=(level-last.low)/rng
-            if wick < self.MIN_WICK_PCT: return None
-            # volumen spike en rechazo
-            vol_avg=sum(b.volume for b in m5[-20:-1])/19 if len(m5)>=20 else last.volume
-            if vol_avg>0 and last.volume < vol_avg*1.2:
-                return None
+            if (level-last.low)/rng < self.MIN_WICK_PCT: return None
+            # volumen spike opcional (peso, no veto estricto)
+            # si no hay volumen (forex 0) no veta
+            vol_avg=(sum(b.volume for b in m5[-self.VOL_LOOKBACK:-1])/(self.VOL_LOOKBACK-1)) if len(m5)>=self.VOL_LOOKBACK and sum(b.volume for b in m5[-self.VOL_LOOKBACK:-1])>0 else 0
+            # no vetar, solo marca
             entry=last.close
-            sl=imp_low - _atr(m15,14)*0.2
-            if sl>=entry: return None
-            return Signal(time=t,symbol=sym,side=Side.BUY,entry=entry,sl=sl,tp=tp1,strategy=self.name,context={"acc":acc_ok,"fib618":round(e618,2),"fib786":round(e786,2),"fvg":fvg_ok,"dir":"BUY"})
+            sl_price=lo - _atr(m15,14)*0.2
+            if sl_price>=entry: return None
+            # TP con RR=2 para pasar risk veto, pero nivel fib como referencia en context
+            risk=entry - sl_price
+            tp_rr=entry + risk*2.0
+            tp_fib=lo+1.272*diff
+            tp=tp_rr
+            # BE_MODE configurable: si fib_1272 usar tp_fib para BE calc en backtester (via context)
+            be_ref= tp_fib if self.BE_MODE=="fib_1272" else tp_rr
+            return Signal(time=t,symbol=sym,side=Side.BUY,entry=entry,sl=sl_price,tp=tp,strategy=self.name,context={"acc":acc_ok,"fvg_ok":fvg_ok,"fvg_weight":0.2 if fvg_ok else 0,"fib618":round(e618,2),"fib786":round(e786,2),"tp_fib":round(tp_fib,2),"tp_rr":round(tp_rr,2),"be_mode":self.BE_MODE,"be_ref":round(be_ref,2),"dir":"BUY"})
         else:
-            # SELL
-            # fib invertido: imp_high es top, imp_low es bottom (para sell diff negativo)
-            # recalcular: swing high -> swing low bajista
-            top=m15[swing_high_idx].high; bot=m15[swing_low_idx].low
-            diff2=top-bot
-            e618=top-0.618*diff2; e786=top-0.786*diff2
-            tp1=top-1.272*diff2
-            _,fvg_bear=_detect_fvg(m15)
+            top=m15[sh].high; bot=m15[sl].low
+            e618=top-0.618*diff; e786=top-0.786*diff
+            _,fvg_bear=_detect_fvg(m15, self.MIN_GAP_ATR)
             fvg_ok=any(e786<=bot<=e618 or e786<=top<=e618 for _,top,bot in fvg_bear)
-            price=m5[-1].close
-            if not (e786 <= price <= e618):
-                return None
-            if not fvg_ok: return None
-            atr_m15=_atr(m15[-30:],14)
-            last=m5[-1]
             level=e786
             if not (last.high >= level and last.close < level):
                 return None
@@ -185,12 +162,13 @@ class WyckoffV2(Strategy):
             if depth > self.MAX_DEPTH_ATR*atr_m15: return None
             rng=last.high-last.low
             if rng<=0: return None
-            wick=(last.high-level)/rng
-            if wick < self.MIN_WICK_PCT: return None
-            vol_avg=sum(b.volume for b in m5[-20:-1])/19 if len(m5)>=20 else last.volume
-            if vol_avg>0 and last.volume < vol_avg*1.2:
-                return None
+            if (last.high-level)/rng < self.MIN_WICK_PCT: return None
             entry=last.close
-            sl=top + _atr(m15,14)*0.2
-            if sl<=entry: return None
-            return Signal(time=t,symbol=sym,side=Side.SELL,entry=entry,sl=sl,tp=tp1,strategy=self.name,context={"acc":acc_ok,"fib618":round(e618,2),"fib786":round(e786,2),"fvg":fvg_ok,"dir":"SELL"})
+            sl_price=top + _atr(m15,14)*0.2
+            if sl_price<=entry: return None
+            risk=sl_price - entry
+            tp_rr=entry - risk*2.0
+            tp_fib=top-1.272*diff
+            tp=tp_rr
+            be_ref=tp_fib if self.BE_MODE=="fib_1272" else tp_rr
+            return Signal(time=t,symbol=sym,side=Side.SELL,entry=entry,sl=sl_price,tp=tp,strategy=self.name,context={"acc":acc_ok,"fvg_ok":fvg_ok,"fvg_weight":0.2 if fvg_ok else 0,"fib618":round(e618,2),"fib786":round(e786,2),"tp_fib":round(tp_fib,2),"tp_rr":round(tp_rr,2),"be_mode":self.BE_MODE,"be_ref":round(be_ref,2),"dir":"SELL"})

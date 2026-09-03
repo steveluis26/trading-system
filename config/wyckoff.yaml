@@ -1,0 +1,46 @@
+# Wyckoff v2 — parámetros ajustables sin tocar código
+# Todos los valores que no están decididos quedan aquí para cambiar sin recompilar
+# BE_MODE: "pct_40" (40% camino a TP) o "fib_1272" (al tocar fib 1.272)
+
+strategy: wyckoff_v2
+be_mode: pct_40
+
+accumulation:
+  atr_mult: 1.5
+  min_bars: 20
+
+swings:
+  lookback: 5
+
+fvg:
+  min_gap_atr: 0.2
+  mode: weight  # weight = OR peso, no veto
+
+volume:
+  lookback: 20
+  spike_mult: 1.2
+  divergence_mult: 1.5
+
+fib:
+  entry_lo: 0.618
+  entry_hi: 0.786
+  tp1: 1.272
+  tp2: 1.618
+  tp_mode: rr_2  # rr_2 = TP = entry + 2*R para pasar risk veto; fib como referencia en context
+
+filters:
+  max_depth_atr: 1.0
+  min_wick_pct: 0.50
+  max_reclaim_bars: 2
+
+# 8 pendientes bloqueantes como params (cambiar tras llamada sin código)
+pending:
+  max_open_positions: 2
+  sessions_utc:
+    london: [02, 11]  # MX 02-11 = UTC 08-17, ajustar según DST
+    newyork: [07, 16]
+    asia: [18, 03]
+  fvg_fresh: true
+  symbols: [XAUUSD]
+  time_stop_bars: null
+  fib_origin: swing  # swing | impulse

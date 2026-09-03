@@ -11,7 +11,7 @@ const WINDOWS = [
   { key: "ano", label: "Año" },
 ];
 
-export function PeriodTable({ symbol }: { symbol: string }) {
+export function PeriodTable({ symbol, strategy = "v4" }: { symbol: string; strategy?: string }) {
   const [win, setWin] = useState("mes");
   const [rows, setRows] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,12 +19,12 @@ export function PeriodTable({ symbol }: { symbol: string }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    fetchEquity(symbol, win)
+    fetchEquity(symbol, win, strategy)
       .then((d) => alive && setRows(d.rows))
       .catch(() => alive && setRows([]))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [symbol, win]);
+  }, [symbol, win, strategy]);
 
   const pos = rows.filter((r) => r.pnl >= 0).length;
   const neg = rows.length - pos;

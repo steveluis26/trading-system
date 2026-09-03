@@ -9,6 +9,7 @@ import { PeriodTable } from "@/components/PeriodTable";
 const SYMBOLS = ["EURUSD", "GBPUSD", "XAUUSD"];
 
 export default function Home() {
+  const [strategy, setStrategy] = useState<"v4" | "wyckoff">("v4");
   const [panels, setPanels] = useState<Record<string, PanelSnapshot>>({});
   const [bt, setBt] = useState<Record<string, BacktestMetrics | null>>({});
   const [updated, setUpdated] = useState<string>("");
@@ -21,21 +22,25 @@ export default function Home() {
     } catch { /* mantener último estado */ }
   }
 
-  async function loadBt() {
+  async function loadBt(strat: string) {
     const out: Record<string, BacktestMetrics | null> = {};
     for (const s of [...SYMBOLS, "ALL"]) {
-      try { out[s] = await fetchBacktest(s); } catch { out[s] = null; }
+      try { out[s] = await fetchBacktest(s, strat); } catch { out[s] = null; }
     }
     setBt(out);
   }
 
   useEffect(() => {
     refresh();
-    loadBt();
     const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadBt(strategy);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategy]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#0b1220_0%,#060912_60%)] text-slate-200">
@@ -46,12 +51,19 @@ export default function Home() {
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
               <span className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-400/80">Live</span>
             </div>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Panel de Estrategia SMC</h1>
-            <p className="mt-1 text-sm text-slate-400">Contexto multi-timeframe en tiempo real · Caso A (solo lectura)</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Panel de Estrategia</h1>
+            <p className="mt-1 text-sm text-slate-400">Contexto multi-timeframe en tiempo real · Caso A (solo lectura) · Estrategias integradas</p>
           </div>
           <div className="text-right text-xs text-slate-500">
-            <div>Actualizado {updated || "—"}</div>
-            <div className="mt-0.5">EURUSD · GBPUSD · XAUUSD</div>
+            <div className="flex items-center gap-2 justify-end">
+              <span className="text-[11px] uppercase tracking-widest text-slate-500">Estrategia</span>
+              <div className="flex rounded-full bg-slate-800 p-1">
+                <button onClick={() => setStrategy("v4")} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${strategy==="v4" ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"}`}>v4 SMC</button>
+                <button onClick={() => setStrategy("wyckoff")} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${strategy==="wyckoff" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-white"}`}>v2 Wyckoff</button>
+              </div>
+            </div>
+            <div className="mt-2">Actualizado {updated || "—"}</div>
+            <div className="mt-0.5">EURUSD · GBPUSD · XAUUSD · {strategy==="v4" ? "RR 1:2" : "Fib 1.272/1.618 · BE "+(strategy==="wyckoff" ? "pct_40|fib_1272" : "")}</div>
           </div>
         </header>
 
@@ -63,21 +75,21 @@ export default function Home() {
         </section>
 
         <section className="mt-10">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Backtest por par (datos reales · veredicto honesto)</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Backtest por par (datos reales · veredicto honesto) — {strategy==="v4" ? "v4 SMC (sesiones→BOS)" : "v2 Wyckoff (Acum→Fib/FVG)"}</h2>
           <div className="grid gap-4 md:grid-cols-3">
-            {SYMBOLS.map((s) => <BacktestCard key={s} symbol={s} m={bt[s] ?? null} />)}
+            {SYMBOLS.map((s) => <BacktestCard key={`${strategy}-${s}`} symbol={s} m={bt[s] ?? null} />)}
           </div>
         </section>
 
         <section className="mt-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Total conjunto (3 pares)</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Total conjunto (3 pares) — {strategy}</h2>
           <BacktestCard symbol="ALL" m={bt["ALL"] ?? null} />
         </section>
 
         <section className="mt-10">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Evolución por periodo</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Evolución por periodo — {strategy}</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            {[...SYMBOLS, "ALL"].map((s) => <PeriodTable key={s} symbol={s} />)}
+            {[...SYMBOLS, "ALL"].map((s) => <PeriodTable key={`${strategy}-${s}`} symbol={s} strategy={strategy} />)}
           </div>
         </section>
 
