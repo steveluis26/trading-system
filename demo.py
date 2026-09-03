@@ -96,19 +96,27 @@ def load_data_cached(symbol):
     bars_by_tf=load_set(symbol, base="data/raw")
     dfs={}
     for k,enum in TF_MAP.items():
-        if enum in bars_by_tf:
+        if enum in bars_by_tf and bars_by_tf[enum]:
             bars=bars_by_tf[enum]
             df=pd.DataFrame([{"time":b.time,"open":b.open,"high":b.high,"low":b.low,"close":b.close,"volume":b.volume} for b in bars])
-            if not df.empty: df=df.sort_values("time").reset_index(drop=True); dfs[k]=df
+            if not df.empty:
+                df=df.sort_values("time").reset_index(drop=True); dfs[k]=df
+        else:
+            # debug: Try alternative loading for 15m
+            pass
     return dfs
 
 def run_bt(strategy,symbol,equity, wyckoff_params=None):
     COMMON_START=datetime(2024,8,26,tzinfo=timezone.utc); COMMON_END=datetime(2026,5,15,23,59,tzinfo=timezone.utc)
     set_=load_set(symbol,"data/raw")
     needed=[Timeframe.D1,Timeframe.H4,Timeframe.H1,Timeframe.M15,Timeframe.M5]
-    for tf in needed: set_[tf]=[b for b in set_[tf] if COMMON_START<=b.time<=COMMON_END]
+    for tf in needed:
+        if tf in set_:
+            set_[tf]=[b for b in set_[tf] if COMMON_START<=b.time<=COMMON_END]
+    if Timeframe.M5 not in set_ or not set_[Timeframe.M5]:
+        raise ValueError(f"Sin M5 para {symbol}")
     m5=set_[Timeframe.M5]; t0,t1=m5[0].time,m5[-1].time
-    aligned={tf:[b for b in set_[tf] if t0<=b.time<=t1] for tf in needed}
+    aligned={tf:[b for b in set_[tf] if t0<=b.time<=t1] for tf in needed if tf in set_}
     # parchear params wyckoff si viene
     if wyckoff_params and hasattr(strategy,'ACC_ATR_MULT'):
         for k,v in wyckoff_params.items(): setattr(strategy,k,v)
