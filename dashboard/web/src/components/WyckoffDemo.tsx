@@ -91,15 +91,30 @@ export function WyckoffDemo() {
     fetchConfigDefaults().then(setDefaults).catch(console.error);
   }, []);
 
-  // Load analysis when symbol/params change
+  // Load analysis when symbol/params/lab change — lab sliders now trigger refetch with params
   useEffect(() => {
     if (!symbol) return;
     setLoading(true);
-    fetchWyckoffAnalysis(symbol, lookbackDays, minSessions)
-      .then(setAnalysis)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [symbol, lookbackDays, minSessions]);
+    const labParams = {
+      swing_lookback: lab.swingLookback,
+      atr_mult: lab.atrMult,
+      min_gap_atr: lab.minGapAtr,
+      min_bars_acc: lab.minBarsAcc,
+      vol_lookback: lab.volLookback,
+      vol_spike: lab.volSpike,
+      divergence_mult: lab.divergenceMult,
+      bars_to_display: lab.barsToDisplay,
+      timeframe: lab.timeframe,
+    };
+    // pass lab as query string to wyckoff analysis
+    const qs = new URLSearchParams({
+      lookback_days: String(lookbackDays),
+      min_sessions: String(minSessions),
+      ...Object.fromEntries(Object.entries(labParams).map(([k,v]) => [k, String(v)])),
+    });
+    fetch(`${process.env.NEXT_PUBLIC_API || "http://127.0.0.1:8000"}/api/demo/wyckoff/${symbol}?${qs.toString()}`)
+      .then(r=>r.json()).then(setAnalysis).catch(console.error).finally(()=>setLoading(false));
+  }, [symbol, lookbackDays, minSessions, lab]);
 
   const handleRunBacktest = async () => {
     setBtLoading(true);

@@ -1,0 +1,27 @@
+wyckoff:
+  atr_mult: 1.5
+  divergence_mult: 1.5
+  fib_levels:
+    '0.618': true
+    '0.786': true
+    '1.272': true
+    '1.618': true
+  min_acc_bars: 20
+  min_gap_atr: 0.2
+  n_swings: 5
+  news_guard:
+    scope: us_plus_major_central_banks
+    sl_widen_mult: 1.5
+    window_min: 15
+  sessions:
+    asia:
+    - 00:00:00
+    - 01:00:00
+    london:
+    - 08:00:00
+    - 09:00:00
+    ny:
+    - '13:30:00'
+    - '14:30:00'
+  vol_lookback: 20
+  vol_mult_threshold: 1.2

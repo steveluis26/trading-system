@@ -11,6 +11,10 @@ lot_sizing:
 risk_reward:
   ratio: 2.0
   fixed: true
+  sl_pips:
+    XAUUSD: 45.0
+    EURUSD: 20.0
+    GBPUSD: 22.0
 
 # --- Breakeven ---
 breakeven:
