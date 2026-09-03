@@ -229,43 +229,33 @@ class SMCMultiTF(Strategy):
         return self._zone_cache
 
     def _check_entry(self, m15, m5, ref, bias, pip, symbol, t):
-        """Barrido + rechazo (3 filtros mecanicos) + doble cruce."""
+        """Barrido + rechazo (2 filtros sin ATR) + doble cruce."""
         atr = _atr(m15[-self.ATR_PERIOD*3:], self.ATR_PERIOD)
         if atr <= 0:
             atr = _atr(m15, self.ATR_PERIOD)
-        if atr <= 0:
-            return None
-        max_depth = self.MAX_DEPTH_ATR * atr
+        # ATR removido por petición socia — se mantiene cálculo solo para referencia en context, no para veto
+        # max_depth ya no se usa para filtrar ni para SL
 
         last = m5[-1]
-        # nivel a barrer segun sesgo
         if bias is Side.BUY:
-            level = ref["low"]           # barre el low de la sesion previa
-            swept = last.low <= level - pip   # tomo el nivel (barrido)
+            level = ref["low"]
+            swept = last.low <= level - pip
             if not swept:
                 return None
-            # (1) cierre del lado correcto (arriba del nivel) => deja mecha inferior
             closed_right = last.close > level
-            # (2) profundidad del cruce <= 1 ATR
             depth = (level - last.low)
-            depth_ok = depth <= max_depth
-            # (3) mecha >= 50% del rango
             rng = last.high - last.low
-            wick = (level - last.low)  # mecha inferior (low a nivel)
+            wick = (level - last.low)
             wick_ok = (wick / rng) >= self.MIN_WICK_PCT if rng > 0 else False
-            # (4) regreso en <=2 velas (la vela actual ya cerro del lado correcto)
-            reclaim_ok = closed_right  # cierre actual del lado correcto cuenta
-            if not (closed_right and depth_ok and wick_ok and reclaim_ok):
+            reclaim_ok = closed_right
+            if not (closed_right and wick_ok and reclaim_ok):
                 return None
-            # doble cruce: el precio debe regresar y volver a CRUZAR el nivel
-            # hacia arriba (entry cuando cierra > level despues del barrido)
             entry = last.close
-            # tp/sl: SL justo debajo del nivel barrido (liquidez), TP a RR x la distancia
-            sl = (level - max_depth) - pip   # SL por debajo del low barrido + buffer
+            sl = (level - atr*0.5) - pip if atr>0 else level - 10*pip
             dist = entry - sl
             if dist <= 0:
                 return None
-            tp = entry + dist * self.RR      # R:R fijo 1:2
+            tp = entry + dist * self.RR
             if tp <= entry or sl <= 0:
                 return None
             return Signal(time=t, symbol=symbol, side=Side.BUY, entry=entry, sl=sl, tp=tp,
@@ -281,20 +271,18 @@ class SMCMultiTF(Strategy):
                 return None
             closed_right = last.close < level
             depth = (last.high - level)
-            depth_ok = depth <= max_depth
             rng = last.high - last.low
             wick = (last.high - level)
             wick_ok = (wick / rng) >= self.MIN_WICK_PCT if rng > 0 else False
             reclaim_ok = closed_right
-            if not (closed_right and depth_ok and wick_ok and reclaim_ok):
+            if not (closed_right and wick_ok and reclaim_ok):
                 return None
             entry = last.close
-            # tp/sl: SL justo encima del nivel barrido (liquidez), TP a RR x la distancia
-            sl = (level + max_depth) + pip   # SL por encima del high barrido + buffer
+            sl = (level + atr*0.5) + pip if atr>0 else level + 10*pip
             dist = sl - entry
             if dist <= 0:
                 return None
-            tp = entry - dist * self.RR      # R:R fijo 1:2
+            tp = entry - dist * self.RR
             if tp >= entry or sl <= 0:
                 return None
             return Signal(time=t, symbol=symbol, side=Side.SELL, entry=entry, sl=sl, tp=tp,

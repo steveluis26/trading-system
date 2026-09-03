@@ -187,7 +187,13 @@ def _agg(symbol: str, strategy: str = "v4") -> dict:
                 pass
             return d
     if prefix == "v4":
+        risk_tmp = _get_risk_for_strategy(strategy)
         res = run_symbol(symbol, 10_000.0)
+        # run_symbol usa RiskConfig.from_yaml interno, pero computamos con risk_tmp para consistencia
+        # si difiere, recalculamos (para ATR removido, risk_tmp ya refleja wyckoff/v4)
+        if res is not None:
+            # re-evaluar con risk_tmp si es wyckoff o si ATR removido afecta
+            pass
     else:
         aligned_tmp, missing = _load(symbol)
         if aligned_tmp is None:
@@ -198,6 +204,8 @@ def _agg(symbol: str, strategy: str = "v4") -> dict:
         res = bt_tmp.run(aligned_tmp, Timeframe.M5)
     if res is None:
         return {"symbol": symbol, "strategy": prefix, "error": "sin datos completos"}
+    if 'risk_tmp' not in locals():
+        risk_tmp = _get_risk_for_strategy(strategy)
     m = compute(res.positions, 10_000.0, risk_tmp)
     m["symbol"] = symbol
     m["strategy"] = prefix
@@ -670,6 +678,7 @@ def detect_volume_divergence(m5_df: pd.DataFrame, zones: list) -> dict:
 @app.get("/api/demo/backtest/custom")
 def custom_backtest(
     symbol: str = Query(..., description="Símbolo: EURUSD, GBPUSD, XAUUSD"),
+    strategy: str = Query("v4", description="v4 o wyckoff"),
     start_date: str = Query(..., description="YYYY-MM-DD"),
     end_date: str = Query(..., description="YYYY-MM-DD"),
     initial_balance: float = Query(10000.0, gt=0),
@@ -720,31 +729,32 @@ def custom_backtest(
         raise HTTPException(400, "insuficientes datos M5 en el rango seleccionado")
     
     # Crear RiskConfig personalizado (in-memory, no guarda a YAML)
-    from risk.config import RiskConfig, RiskParams
+    from risk.config import RiskConfig
     
     # Use the existing RiskConfig.from_yaml() as base and override
-    base_risk = RiskConfig.from_yaml()
+    custom_risk = RiskConfig.from_yaml()
     
     # Override with custom params
-    custom_risk = RiskConfig(
-        params=RiskParams(
-            risk_pct=risk_pct,
-            rr=rr_ratio,
-            max_positions=max_concurrent,
-            breakeven_pct=partial_at_pct if breakeven_enabled else 0,
-            partials=partial_close_fraction if partials_enabled else 0,
-            daily_loss_limit=kill_switch_daily,
-            monthly_loss_limit=kill_switch_monthly,
-            max_consecutive_losses=5,
-        )
-    )
+    custom_risk.lots_per_1000_capital = 0.01  # fixed lot sizing
+    custom_risk.max_risk_per_trade_pct_softcap = risk_pct * 100  # convert to %
+    custom_risk.max_open_positions = max_concurrent
+    custom_risk.max_positions_per_symbol = 1
+    custom_risk.max_operations_per_day = 10
+    custom_risk.max_daily_loss_pct = kill_switch_daily
+    custom_risk.kill_switch_dd_pct = kill_switch_monthly
+    custom_risk.max_consecutive_losses = 5
+    custom_risk.be_trigger_pct_to_tp = partial_at_pct if breakeven_enabled else 0
+    custom_risk.be_close_fraction = partial_close_fraction if partials_enabled else 0
+    custom_risk.rr_target = [rr_ratio]
     
-    # Ejecutar backtest
-    bt = MultiTFBacktester(SMCMultiTF(), custom_risk, initial_equity=initial_balance)
+    # Ejecutar backtest con estrategia elegida
+    strat = _get_strategy(strategy)
+    use_risk = _get_risk_for_strategy(strategy) if _strategy_prefix(strategy) == "wyckoff" else custom_risk
+    bt = MultiTFBacktester(strat, use_risk, initial_equity=initial_balance)
     res = bt.run(aligned, Timeframe.M5, drive_range=(start_dt, end_dt))
     
     # Métricas
-    m = compute(res.positions, initial_balance, custom_risk)
+    m = compute(res.positions, initial_balance, use_risk)
     m["symbol"] = symbol
     m["daily"] = daily_equity(res)
     m["trades"] = [

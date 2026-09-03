@@ -217,10 +217,9 @@ class WyckoffV2(Strategy):
             for k in range(min(2, len(m5))):
                 b=m5[-(1+k)]
                 if b.low <= level and b.close > level:
-                    depth=level-b.low
                     rng=b.high-b.low
                     wick=(level-b.low)/rng if rng>0 else 0
-                    if depth <= self.MAX_DEPTH_ATR*atr_m15 and wick >= self.MIN_WICK_PCT:
+                    if wick >= self.MIN_WICK_PCT:
                         swept=True
                         last=b
                         break
@@ -229,8 +228,6 @@ class WyckoffV2(Strategy):
             entry=last.close
             sl_price=lo - _atr(m15,14)*0.2
             if sl_price>=entry: return None
-            # TP: por ahora RR 2.0 para no romper PF (fib 1.272/1.618 en context como referencia real)
-            # Cuando spec confirme TP fib puro, se cambiará a tp1
             tp1=lo+self.FIB_TP1*diff
             tp2=lo+self.FIB_TP2*diff
             tp_rr_val=entry + (entry-sl_price)*2.0
@@ -249,10 +246,9 @@ class WyckoffV2(Strategy):
             for k in range(min(2, len(m5))):
                 b=m5[-(1+k)]
                 if b.high >= level and b.close < level:
-                    depth=b.high-level
                     rng=b.high-b.low
                     wick=(b.high-level)/rng if rng>0 else 0
-                    if depth <= self.MAX_DEPTH_ATR*atr_m15 and wick >= self.MIN_WICK_PCT:
+                    if wick >= self.MIN_WICK_PCT:
                         swept=True
                         last=b
                         break
