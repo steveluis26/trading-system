@@ -1,43 +1,100 @@
-# Limites de riesgo - EXTRAIDOS de encuesta + 7 aclaraciones (2026-08).
-# Ver docs/ESTRATEGIA_EXTRAIDA.md > "Clarificaciones" para el razonamiento.
+# Risk Configuration - Completo para validación Pydantic
+# Ver backtester/config_loader.py para modelos exactos
 
 # --- Sizing ---
-# CONFIRMADO por ella: usa la formula de LOTES (no la de 1% riesgo).
-#   ORO: 0.01 lote = $1/pip (pip = ultimos 3 digitos) -> 0.01/$1000 de capital.
-#   EURUSD/GBPUSD: 0.01 lote = $0.10/pip.
-# El motor dimensiona por ESTA regla y REPORTA el % de riesgo efectivo (suele
-# quedar ~2% a 20-40 pips de SL, no 1%). El 1% era la meta aspiracional.
-lots_per_1000_capital: 0.01
-max_risk_per_trade_pct_softcap: 2.5   # alerta si el sizing efectivo lo supera
+lot_sizing:
+  mode: "fixed_lot"          # "pct_risk" | "fixed_lot"
+  risk_pct_per_trade: 0.01
+  lots_per_1000_capital: 0.01
 
-# --- Limites operativos ---
-max_open_positions: 2
-max_positions_per_symbol: 1      # si falla/cierra en un par -> ir a OTRO par
-max_operations_per_day: 5
-max_daily_loss_pct: 5.0          # 5% del capital del dia -> parar el dia
-max_drawdown_monthly_pct: 30.0   # 30% mensual -> STOP total (reactivacion manual)
-max_consecutive_losses: 5        # 5 PERDIDAS SEGUIDAS -> BLOQUEO total del sistema
-reentry_same_zone: false         # si falla la primera, no reentrar esa zona
+# --- Risk:Reward ---
+risk_reward:
+  ratio: 2.0
+  fixed: true
 
-# --- Kill-switch ---
-kill_switch_dd_pct: 30.0
-halt_reactivation: manual        # SOLO ella lo reactiva
+# --- Breakeven ---
+breakeven:
+  enabled: true
+  trigger_pct_of_tp: 40.0
+  move_sl_to_entry: true
 
-# --- Sesiones (UTC) ---
-sessions:
-  london:  [8, 17]
-  newyork: [13, 22]
-no_trade_weekday: 4              # viernes NO opera
-no_hold_over_weekend: true       # cerrar antes del fin de semana
-news_filter: high_impact_usd     # no entrar en dias de noticias fuertes del dolar
+# --- Partials ---
+partials:
+  enabled: true
+  stages:
+    - at_pct_of_tp: 40.0
+      close_fraction: 0.333
 
-# --- Salida ---
-breakeven_partial:
-  trigger_pct_to_tp: 40.0        # a 40% del camino al TP: SL->breakeven + parcial
-  close_fraction: 33.3           # cerrar 1/3 del lotaje (ej 0.03 -> 0.02)
-rr_target: [2.0, 3.0]            # TP = 2x o 3x la distancia al SL (1:2 o 1:3)
+# --- Limits ---
+limits:
+  max_concurrent_trades: 2
+  max_daily_trades: 5
+  daily_loss_limit_pct: 5.0
+  monthly_loss_limit_pct: 30.0
+  max_consecutive_losses: 5
+  reactivation: "manual"
+  scope: "per_account"
 
-# --- Costos (placeholder H1; afinar por par en Fase 2) ---
+# --- Session Filters ---
+session_filters:
+  avoid_friday_afternoon: true
+  avoid_weekends: true
+  avoid_high_impact_usd_news: true
+
+# --- Rejection Validation (filtros de entrada) ---
+rejection_validation:
+  atr_period: 14
+  max_penetration_atr: 1.0
+  min_wick_ratio: 0.5
+  max_candles_to_reclaim: 2
+  require_volume_spike: true
+  volume_spike_multiplier: 1.5
+
+# --- Entry Trigger ---
+entry_trigger:
+  type: "market"
+  double_cross_required: true
+
+# --- Position Management ---
+position_management:
+  trailing_stop: false
+  close_on_friday: true
+  close_on_connection_loss: false
+
+# --- Kill Switch ---
+kill_switch:
+  daily_loss_pct: 5.0
+  monthly_loss_pct: 30.0
+  consecutive_losses: 5
+  reactivation: "manual"
+
+# --- Structure ---
+structure:
+  macro_timeframes: ["D1", "H4"]
+  setup_timeframe: "M15"
+  entry_timeframe: "M5"
+  trend_lookback_days: 30
+  min_pivots_for_trend: 2
+
+# --- Confluence ---
+confluence:
+  min_sessions: 2
+  max_sessions: 3
+  tolerance_pips:
+    XAUUSD: 100
+    EURUSD: 10
+    GBPUSD: 10
+  weight_multiplier: 1.5
+
+# --- News Filter ---
+news_filter:
+  lookahead_hours: 24
+  currencies: ["USD"]
+  impacts: ["high"]
+  calendar_source: "external"
+  avoid_high_impact_usd_news: true
+
+# --- Costs (legacy, maintained for backward compat) ---
 costs:
   spread_points:
     EURUSD: 12.0
@@ -47,6 +104,24 @@ costs:
   slippage_points: 3.0
   swap_per_lot_per_day: -2.0
 
-# --- NOTA: la definicion EXACTA de estructura SMC (swing pivots, BOS,
-#     liquidez) esta PENDIENTE en docs/SMC_DEFINICION_PENDIENTE.md.
-#     No se hardcodea aqui hasta quebrada la ambiguedad.
+# --- Parámetros operativos (legacy, para compatibilidad) ---
+max_open_positions: 2
+max_positions_per_symbol: 1
+max_operations_per_day: 5
+max_daily_loss_pct: 5.0
+max_drawdown_monthly_pct: 30.0
+max_consecutive_losses: 5
+reentry_same_zone: false
+kill_switch_dd_pct: 30.0
+halt_reactivation: manual
+sessions:
+  london: [8, 17]
+  newyork: [13, 22]
+no_trade_weekday: 4
+no_hold_over_weekend: true
+news_filter_legacy: high_impact_usd
+
+breakeven_partial:
+  trigger_pct_to_tp: 40.0
+  close_fraction: 33.3
+rr_target: [2.0, 3.0]

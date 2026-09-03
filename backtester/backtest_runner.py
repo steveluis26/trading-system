@@ -156,8 +156,10 @@ class BacktestRunner:
                 continue
             
             # Analizar estructura macro (1D) usando días previos
+            # daily_levels contiene Tuple[SessionLevels, List[ConfluenceZone]], extraer solo SessionLevels
+            daily_levels_only = {date: levels_zones[0] for date, levels_zones in daily_levels.items()}
             macro_structure = analyze_structure_for_backtest(
-                daily_levels, candles_4h, current_date
+                daily_levels_only, candles_4h, current_date
             )
             
             if macro_structure.trend == "NEUTRAL":
@@ -202,7 +204,7 @@ class BacktestRunner:
             signals = run_trigger_engine_for_backtest(
                 sweeps, day_candles, symbol,
                 session_levels, macro_structure, confluence_zones,
-                self.risk_config.sl_tp.sl_pips.get(symbol, 45)
+                self.risk_config.risk_reward.ratio
             )
             
             for signal in signals:

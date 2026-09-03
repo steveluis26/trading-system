@@ -74,6 +74,7 @@ class SessionsConfig(BaseModel):
 class LotSizingConfig(BaseModel):
     mode: Literal["pct_risk", "fixed_lot"]
     risk_pct_per_trade: float = 0.01
+    lots_per_1000_capital: float = 0.01
 
 
 class RiskRewardConfig(BaseModel):
