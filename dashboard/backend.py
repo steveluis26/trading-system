@@ -49,6 +49,41 @@ def _strategy_prefix(name: str) -> str:
     s = (name or "v4").lower()
     return "wyckoff" if s in ("wyckoff", "wyckoff_v2", "v2") else "v4"
 
+def _get_risk_for_strategy(strategy: str) -> RiskConfig:
+    prefix = _strategy_prefix(strategy)
+    base = RiskConfig.from_yaml()
+    if prefix == "wyckoff":
+        # Wyckoff usa su propio config, no risk.yaml BE/sessions/RR
+        try:
+            with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "wyckoff.yaml")) as f:
+                y = yaml.safe_load(f) or {}
+            # RR fib: permite 0.6 (fib 1.272) sin veto
+            base.rr_target = [0.4, 3.0]
+            # BE_MODE: pct_40 -> 40, fib_1272 -> 100 (en TP, efectivo casi OFF hasta TP)
+            be_mode = y.get("be_mode", "pct_40")
+            if be_mode == "pct_40":
+                base.be_trigger_pct_to_tp = 40.0
+                base.be_close_fraction = 33.3
+            elif be_mode == "fib_1272":
+                base.be_trigger_pct_to_tp = 100.0
+                base.be_close_fraction = 33.3
+            else:
+                base.be_trigger_pct_to_tp = 40.0
+            # Sesiones Wyckoff UTC
+            pend = y.get("pending", {})
+            sess = pend.get("sessions_utc", {})
+            if sess:
+                if "london" in sess:
+                    base.session_london = tuple(sess["london"])
+                if "newyork" in sess:
+                    base.session_newyork = tuple(sess["newyork"])
+                # asia not used in RiskConfig but keep for future
+        except Exception:
+            pass
+        # Wyckoff RR fib: no vetar por RR bajo
+        base.rr_target = [0.4, 3.0]
+    return base
+
 app = FastAPI(title="Trading System Dashboard API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -106,7 +141,8 @@ def _run_year(symbol: str, year: str, strategy: str = "v4") -> dict:
             return json.load(f)
     aligned, missing = _load(symbol)
     if aligned is None:
-        return {"symbol": symbol, "year": year, "strategy": prefix, "error": f"faltan marcos {missing}"}
+        return {"symbol": symbol,
+        "lab_params": {"swing_lookback": swing_lookback, "atr_mult": atr_mult, "min_gap_atr": min_gap_atr, "min_bars_acc": min_bars_acc, "vol_lookback": vol_lookback, "vol_spike": vol_spike, "divergence_mult": divergence_mult, "bars_to_display": bars_to_display, "timeframe": timeframe}, "year": year, "strategy": prefix, "error": f"faltan marcos {missing}"}
     from datetime import datetime, timezone
     try:
         y = int(year)
@@ -115,9 +151,10 @@ def _run_year(symbol: str, year: str, strategy: str = "v4") -> dict:
     ti = datetime(y, 1, 1, tzinfo=timezone.utc)
     tf = datetime(y, 12, 31, 23, 59, tzinfo=timezone.utc)
     strat = _get_strategy(strategy)
-    bt = MultiTFBacktester(strat, RiskConfig.from_yaml(), initial_equity=10_000.0)
+    risk_cfg = _get_risk_for_strategy(strategy)
+    bt = MultiTFBacktester(strat, risk_cfg, initial_equity=10_000.0)
     res = bt.run(aligned, Timeframe.M5, drive_range=(ti, tf))
-    m = compute(res.positions, 10_000.0, RiskConfig.from_yaml())
+    m = compute(res.positions, 10_000.0, risk_cfg)
     m["symbol"] = symbol
     m["year"] = year
     m["strategy"] = prefix
@@ -156,11 +193,12 @@ def _agg(symbol: str, strategy: str = "v4") -> dict:
         if aligned_tmp is None:
             return {"symbol": symbol, "strategy": prefix, "error": f"faltan marcos {missing}"}
         strat_tmp = _get_strategy(strategy)
-        bt_tmp = MultiTFBacktester(strat_tmp, RiskConfig.from_yaml(), initial_equity=10_000.0)
+        risk_tmp = _get_risk_for_strategy(strategy)
+        bt_tmp = MultiTFBacktester(strat_tmp, risk_tmp, initial_equity=10_000.0)
         res = bt_tmp.run(aligned_tmp, Timeframe.M5)
     if res is None:
         return {"symbol": symbol, "strategy": prefix, "error": "sin datos completos"}
-    m = compute(res.positions, 10_000.0, RiskConfig.from_yaml())
+    m = compute(res.positions, 10_000.0, risk_tmp)
     m["symbol"] = symbol
     m["strategy"] = prefix
     m["daily"] = daily_equity(res)
@@ -171,7 +209,7 @@ def _agg(symbol: str, strategy: str = "v4") -> dict:
             {"time": p.signal.time.isoformat() if hasattr(p.signal.time, "isoformat") else str(p.signal.time),
              "symbol": p.signal.symbol, "side": p.signal.side.value if hasattr(p.signal.side, "value") else str(p.signal.side),
              "entry": p.open_price, "sl": p.sl if p.sl is not None else p.signal.sl, "tp": p.signal.tp,
-             "close": p.close_price, "close_reason": p.close_reason, "pnl": round(p.pnl(RiskConfig.from_yaml().usd_per_pip(p.signal.symbol), RiskConfig.from_yaml().pip(p.signal.symbol)),2),
+             "close": p.close_price, "close_reason": p.close_reason, "pnl": round(p.pnl(risk_tmp.usd_per_pip(p.signal.symbol), risk_tmp.pip(p.signal.symbol)),2),
              "volume": p.volume, "strategy": p.signal.strategy}
             for p in res.positions[:200]
         ]
@@ -327,16 +365,44 @@ from backtester.session_calculator import SessionCalculator, calculate_session_l
 from backtester.config_loader import get_risk, get_instruments, get_sessions
 from backtester.setup_detector import SetupDetector, calculate_atr
 from backtester.trigger_engine import TriggerEngine, run_trigger_engine_for_backtest
-from backtester.models import Direction, ConfluenceZone, SessionLevels, MarketStructure, SweepEvent, Trend
+from backtester.models import Direction, ConfluenceZone, SessionLevel, SessionLevels, SessionName, MarketStructure, SweepEvent, Trend
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
+
+@app.get("/api/candles/{symbol}")
+def get_candles(
+    symbol: str,
+    timeframe: str = Query("15m", description="5m|15m|1h|4h|1d"),
+    limit: int = Query(500, ge=100, le=2000),
+):
+    symbol = symbol.upper()
+    if symbol not in SYMBOLS:
+        raise HTTPException(404, f"simbolo no soportado: {symbol}")
+    tf_map = {"5m": Timeframe.M5, "15m": Timeframe.M15, "1h": Timeframe.H1, "4h": Timeframe.H4, "1d": Timeframe.D1}
+    tf = tf_map.get(timeframe.lower())
+    if not tf:
+        raise HTTPException(400, f"timeframe no soportado: {timeframe}")
+    data = load_set(symbol, "data/raw")
+    if tf not in data:
+        raise HTTPException(404, f"sin datos {timeframe} para {symbol}")
+    bars = data[tf][-limit:]
+    return {"symbol": symbol, "timeframe": timeframe, "count": len(bars), "candles": [{"time": b.time.isoformat(), "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume} for b in bars]}
 
 @app.get("/api/demo/wyckoff/{symbol}")
 def wyckoff_analysis(
     symbol: str,
     lookback_days: int = Query(30, ge=7, le=180),
     min_sessions: int = Query(2, ge=1, le=3),
+    swing_lookback: int = Query(5, ge=3, le=10),
+    atr_mult: float = Query(1.5, ge=0.5, le=3.0),
+    min_gap_atr: float = Query(0.2, ge=0.05, le=0.5),
+    min_bars_acc: int = Query(20, ge=10, le=100),
+    vol_lookback: int = Query(20, ge=10, le=50),
+    vol_spike: float = Query(1.2, ge=1.0, le=3.0),
+    divergence_mult: float = Query(1.5, ge=1.0, le=3.0),
+    bars_to_display: int = Query(500, ge=100, le=2000),
+    timeframe: str = Query("15m"),
 ):
     """Análisis Wyckoff multi-timeframe con fases de acumulación/distribución."""
     symbol = symbol.upper()
@@ -496,12 +562,14 @@ def _compute_daily_levels_from_df(daily_df: pd.DataFrame):
     
     for _, row in daily_df.iterrows():
         date = row["timestamp"]
+        high_val = float(row["high"])
+        low_val = float(row["low"])
         # Use daily high/low as proxy for session levels
         result[date] = SessionLevels(
             date=date,
-            asia=SessionLevel(session="ASIA", high=row["high"], low=row["low"], start_time=date, end_time=date, candle_count=0),
-            london=SessionLevel(session="LONDON", high=row["high"], low=row["low"], start_time=date, end_time=date, candle_count=0),
-            newyork=SessionLevel(session="NEWYORK", high=row["high"], low=row["low"], start_time=date, end_time=date, candle_count=0),
+            asia=SessionLevel(session=SessionName.ASIA, high=high_val, low=low_val, start_time=date, end_time=date, candle_count=0),
+            london=SessionLevel(session=SessionName.LONDON, high=high_val, low=low_val, start_time=date, end_time=date, candle_count=0),
+            newyork=SessionLevel(session=SessionName.NEWYORK, high=high_val, low=low_val, start_time=date, end_time=date, candle_count=0),
             timezone="America/Mexico_City"
         )
     return result
@@ -638,14 +706,13 @@ def custom_backtest(
     
     # Filtrar por fechas
     try:
-        ti = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        tf = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
     except ValueError:
         raise HTTPException(400, "formato fecha invalido (YYYY-MM-DD)")
-    
     aligned = {
-        tf: [b for b in bars if ti <= b.time <= tf] 
-        for tf, bars in aligned.items()
+        t: [b for b in bars if start_dt <= b.time <= end_dt]
+        for t, bars in aligned.items()
     }
     
     # Verificar datos suficientes
@@ -674,7 +741,7 @@ def custom_backtest(
     
     # Ejecutar backtest
     bt = MultiTFBacktester(SMCMultiTF(), custom_risk, initial_equity=initial_balance)
-    res = bt.run(aligned, Timeframe.M5, drive_range=(ti, tf))
+    res = bt.run(aligned, Timeframe.M5, drive_range=(start_dt, end_dt))
     
     # Métricas
     m = compute(res.positions, initial_balance, custom_risk)
@@ -718,7 +785,7 @@ def demo_config_defaults():
             "breakeven_enabled": risk.breakeven.enabled,
             "breakeven_trigger_pct": risk.breakeven.trigger_pct_of_tp,
             "partials_enabled": risk.partials.enabled,
-            "partial_stages": [{"at_pct": s.at_pct_of_tp, "close_fraction": s.close_fraction} for s in risk.partials.stages],
+            "partial_stages": [{"at_pct": s["at_pct_of_tp"], "close_fraction": s["close_fraction"]} for s in risk.partials.stages],
             "max_concurrent": risk.limits.max_concurrent_trades,
             "max_daily_loss": risk.limits.daily_loss_limit_pct,
             "max_monthly_loss": risk.limits.monthly_loss_limit_pct,
