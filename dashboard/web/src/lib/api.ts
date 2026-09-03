@@ -85,7 +85,7 @@ export interface SignalEvent {
   tp_pips: number;
   confidence: number;
   timestamp: string;
-  validation: any;
+  validation: unknown;
 }
 
 export interface VolumeDivergence {
