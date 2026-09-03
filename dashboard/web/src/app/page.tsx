@@ -5,11 +5,12 @@ import { fetchPanels, fetchBacktest, PanelSnapshot, BacktestMetrics } from "@/li
 import { PairCard } from "@/components/PairCard";
 import { BacktestCard } from "@/components/BacktestCard";
 import { PeriodTable } from "@/components/PeriodTable";
+import { WyckoffDemo } from "@/components/WyckoffDemo";
 
 const SYMBOLS = ["EURUSD", "GBPUSD", "XAUUSD"];
 
 export default function Home() {
-  const [strategy, setStrategy] = useState<"v4" | "wyckoff">("v4");
+  const [strategy, setStrategy] = useState<"v4" | "wyckoff" | "demo">("v4");
   const [panels, setPanels] = useState<Record<string, PanelSnapshot>>({});
   const [bt, setBt] = useState<Record<string, BacktestMetrics | null>>({});
   const [updated, setUpdated] = useState<string>("");
@@ -60,6 +61,7 @@ export default function Home() {
               <div className="flex rounded-full bg-slate-800 p-1">
                 <button onClick={() => setStrategy("v4")} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${strategy==="v4" ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"}`}>v4 SMC</button>
                 <button onClick={() => setStrategy("wyckoff")} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${strategy==="wyckoff" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-white"}`}>v2 Wyckoff</button>
+                <button onClick={() => setStrategy("demo")} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${strategy==="demo" ? "bg-violet-500 text-white" : "text-slate-400 hover:text-white"}`}>Wyckoff Demo</button>
               </div>
             </div>
             <div className="mt-2">Actualizado {updated || "—"}</div>
@@ -92,6 +94,14 @@ export default function Home() {
             {[...SYMBOLS, "ALL"].map((s) => <PeriodTable key={`${strategy}-${s}`} symbol={s} strategy={strategy} />)}
           </div>
         </section>
+
+        {strategy === "demo" && (
+          <section className="mt-10">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-violet-400">Laboratorio Wyckoff Demo — Controles Live + Backtest Parametrizado</h2>
+            <p className="mb-4 text-xs text-slate-500">Ajusta todos los parámetros en vivo. La gráfica y métricas se actualizan sin recompilar. Los 11 pendientes quedan como sliders/checkboxes para tu llamada.</p>
+            <WyckoffDemo />
+          </section>
+        )}
 
         <footer className="mt-10 border-t border-white/5 pt-6 text-[11px] leading-relaxed text-slate-600">
           SMC (Smart Money Concepts): sesgo D1 → impulso H1 → barrido de liquidez M15 → BOS M5.
