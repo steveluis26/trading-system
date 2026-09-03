@@ -26,8 +26,9 @@ export function PeriodTable({ symbol, strategy = "v4" }: { symbol: string; strat
     return () => { alive = false; };
   }, [symbol, win, strategy]);
 
-  const pos = rows.filter((r) => r.pnl >= 0).length;
-  const neg = rows.length - pos;
+  const pos = rows.filter((r) => r.pnl > 0).length;
+  const neg = rows.filter((r) => r.pnl < 0).length;
+  const flat = rows.length - pos - neg;
 
   return (
     <div className="rounded-2xl bg-slate-900/70 p-5 ring-1 ring-white/5">
@@ -52,6 +53,7 @@ export function PeriodTable({ symbol, strategy = "v4" }: { symbol: string; strat
         <span>{rows.length} periodos</span>
         <span className="text-emerald-400">▲ {pos} ganados</span>
         <span className="text-rose-400">▼ {neg} perdidos</span>
+        {flat > 0 && <span className="text-slate-500">— {flat} planos (0.00%)</span>}
       </div>
 
       <div className="mt-3 max-h-64 overflow-y-auto rounded-lg bg-slate-800/30 ring-1 ring-white/5">
@@ -74,11 +76,11 @@ export function PeriodTable({ symbol, strategy = "v4" }: { symbol: string; strat
             {!loading && rows.map((r) => (
               <tr key={r.label} className="border-t border-white/5">
                 <td className="px-3 py-1.5 text-left text-slate-300">{r.label}</td>
-                <td className={`px-3 py-1.5 font-mono tabular-nums ${r.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                  {r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(0)}
+                <td className={`px-3 py-1.5 font-mono tabular-nums ${r.pnl > 0 ? "text-emerald-400" : r.pnl < 0 ? "text-rose-400" : "text-slate-400"}`}>
+                  {r.pnl > 0 ? "+" : ""}{r.pnl.toFixed(0)}
                 </td>
-                <td className={`px-3 py-1.5 font-mono tabular-nums ${r.retorno_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                  {r.retorno_pct >= 0 ? "+" : ""}{r.retorno_pct.toFixed(2)}%
+                <td className={`px-3 py-1.5 font-mono tabular-nums ${r.retorno_pct > 0 ? "text-emerald-400" : r.retorno_pct < 0 ? "text-rose-400" : "text-slate-400"}`}>
+                  {r.retorno_pct > 0 ? "+" : ""}{r.retorno_pct.toFixed(2)}%
                 </td>
                 <td className="px-3 py-1.5 font-mono tabular-nums text-slate-300">{r.equity_final.toFixed(0)}</td>
               </tr>
