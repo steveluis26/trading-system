@@ -218,18 +218,21 @@ class MultiTFBacktester:
         rr = sig.risk_reward
         if rr < min(c.rr_target) - 0.001:
             return f"R:R {rr:.2f} < {min(c.rr_target)}", 0.0
-        # sizing por lotes fijos (confirmado socia) — 0.01 por $1000, fuente única instruments.yaml para pip
-        # Nota: 1% dinámico con SL XAU 1700 pips daría 17% riesgo real con vol 0.01 min, por eso se mantiene fijo
-        vol = round(c.lots_per_1000_capital * equity / 1000, 2)
-        if vol < 0.01:
-            return "Volumen < 0.01", 0.0
-        # cálculo riesgo real para alerta (no bloquea)
+        # sizing 1% dinámico (confirmado socia) — 0.022 lotes a SL45 XAU = $100 (1%)
+        # Regla: si vol < 0.01 (SL extremadamente ancho, ej. 1700 pips), rechaza, no fuerza mínimo
         try:
             sl_pips = abs(sig.entry - sig.sl) / c.pip(sig.symbol) if c.pip(sig.symbol) else 0
             upp = c.usd_per_pip(sig.symbol)
-            risk_pct_eff = sl_pips * vol * upp / equity * 100 if equity else 0
+            if sl_pips > 0 and upp > 0:
+                vol_raw = (equity * 0.01) / (sl_pips * upp)
+                if vol_raw < 0.01 - 1e-9:
+                    return f"SL muy ancho ({sl_pips:.0f} pips) -> vol {vol_raw:.4f} < 0.01, 1% no ejecutable", 0.0
+                vol = round(vol_raw / 0.01) * 0.01
+                vol = max(0.01, min(vol, 100.0))
+            else:
+                vol = round(c.lots_per_1000_capital * equity / 1000, 2)
         except Exception:
-            risk_pct_eff = 0
-        if risk_pct_eff > c.max_risk_per_trade_pct_softcap:
-            pass
+            vol = round(c.lots_per_1000_capital * equity / 1000, 2)
+        if vol < 0.01:
+            return "Volumen < 0.01", 0.0
         return None, vol
