@@ -284,10 +284,10 @@ def _agg_year_all(year: str, strategy: str = "v4") -> dict:
         total["pnl_neto"] += r.get("pnl_neto", 0.0)
         for d, eq in r.get("daily", []):
             daily_delta[d] = daily_delta.get(d, 0.0) + (eq - 10_000.0)
-    total["daily"] = [(d, round(10_000.0 + v, 2)) for d, v in daily_delta.items()]
+    total["daily"] = [(d, round(30_000.0 + v, 2)) for d, v in daily_delta.items()]
     if daily_delta:
-        last_eq = 10_000.0 + daily_delta[list(daily_delta)[-1]]
-        total["retorno_pct"] = round((last_eq / 10_000.0 - 1) * 100, 2)
+        last_eq = 30_000.0 + daily_delta[list(daily_delta)[-1]]
+        total["retorno_pct"] = round((last_eq / 30_000.0 - 1) * 100, 2)
         total["periodo_dias"] = len(daily_delta)
     with open(cache_file, "w") as f:
         json.dump(total, f)
@@ -332,9 +332,10 @@ def _agg_all(strategy: str = "v4") -> dict:
         last_eq = 10_000.0 * len(SYMBOLS)
     total["retorno_pct"] = round((last_eq / (10_000.0 * len(SYMBOLS)) - 1) * 100, 2)
     total["periodo_dias"] = len(daily_delta)
-    total["sharpe_anual"] = sharpe_from_equity(total["daily"])
-    total["max_drawdown_pct"] = max_dd_from_equity(total["daily"])
-    total["retorno_pct"] = round(total["pnl_neto"] / (10_000.0 * len(SYMBOLS)) * 100, 2)
+    initial_all = 10_000.0 * len(SYMBOLS)
+    total["sharpe_anual"] = sharpe_from_equity(total["daily"], initial_all)
+    total["max_drawdown_pct"] = max_dd_from_equity(total["daily"], initial_all)
+    total["retorno_pct"] = round(total["pnl_neto"] / initial_all * 100, 2)
     if pw > 0:
         total["win_rate_pct"] = round(pwins / pw * 100, 2)
     if pf_l > 0:
@@ -361,7 +362,8 @@ def equity_window(symbol: str, window: str, strategy: str = Query("v4")):
     m = _agg_all(strategy) if symbol == "ALL" else _agg(symbol, strategy)
     if "error" in m:
         return {"error": m["error"]}
-    return {"symbol": symbol, "window": window, "strategy": _strategy_prefix(strategy), "rows": pnl_by_window(m.get("daily", []), window)}
+    initial = 30_000.0 if symbol == "ALL" else 10_000.0
+    return {"symbol": symbol, "window": window, "strategy": _strategy_prefix(strategy), "rows": pnl_by_window(m.get("daily", []), window, initial=initial)}
 
 
 # ============================================================
