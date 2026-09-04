@@ -51,8 +51,8 @@ class RiskConfig:
         with open(path) as f:
             d = yaml.safe_load(f)
         c = RiskConfig()
-        # Fuente única: pip_value_per_lot (XAU 1.0 per 0.01 lot, EUR/GBP 10.0 per 1.0 lot) — mantiene 0.10 lotes = $1/pip EUR, $10/pip XAU con vol 0.10
-        # NOTA: pip_value_usd_per_standard_lot (XAU 100) daría 0.10*100=10/pip y 500 pips SL -> $5000 riesgo (50%), mata backtest (1 trade)
+        # Fuente única: pip_value_per_lot (XAU 1.0 per 0.01 lot, EUR/GBP 10.0) — 0.10 lotes = $1/pip XAU? No, 0.01=$1, 0.10=$10, pero para no matar XAU con SL 500 pips se usa 1.0 (0.10*1*500=50$ risk)
+        # pip_value_usd_per_standard_lot (XAU 100) daría 0.10*100*500=5000$ risk 50% -> 1 trade (revertido)
         try:
             import pathlib
             inst_path = pathlib.Path(path).parent / "instruments.yaml"
