@@ -51,8 +51,7 @@ class RiskConfig:
         with open(path) as f:
             d = yaml.safe_load(f)
         c = RiskConfig()
-        # Fuente única: pip_value_per_lot (XAU 1.0 per 0.01 lot, EUR/GBP 10.0) — 0.10 lotes = $1/pip XAU? No, 0.01=$1, 0.10=$10, pero para no matar XAU con SL 500 pips se usa 1.0 (0.10*1*500=50$ risk)
-        # pip_value_usd_per_standard_lot (XAU 100) daría 0.10*100*500=5000$ risk 50% -> 1 trade (revertido)
+        # Fuente única: pip_value_usd_per_standard_lot (XAU 100, EUR/GBP 10) — por lote estándar 1.0
         try:
             import pathlib
             inst_path = pathlib.Path(path).parent / "instruments.yaml"
@@ -60,7 +59,7 @@ class RiskConfig:
                 inst_path = pathlib.Path(__file__).parent.parent / "config" / "instruments.yaml"
             with open(inst_path) as fi:
                 inst = yaml.safe_load(fi) or {}
-            pip_map = {k: v.get("pip_value_per_lot") for k, v in inst.get("instruments", {}).items() if isinstance(v, dict)}
+            pip_map = inst.get("pip_value_usd_per_standard_lot", {})
             for k, v in pip_map.items():
                 if v is not None:
                     c.usd_per_pip_per_lot[k] = float(v)

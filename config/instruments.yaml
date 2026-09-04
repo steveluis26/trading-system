@@ -5,7 +5,8 @@ instruments:
   XAUUSD:
     name: "Gold vs US Dollar"
     pip_size: 0.01              # 1 pip = 0.01 (2 decimales)
-    pip_value_per_lot: 1.0      # $1 por pip por 0.01 lote (estándar broker)
+    pip_value_per_microlot: 1.0      # $1 por pip por 0.01 lote (microlote) — NO usar para sizing, solo referencia
+    pip_value_per_lot: 1.0      # DEPRECATED: usar pip_value_usd_per_standard_lot (100.0) — se mantiene por compatibilidad pero RiskConfig ya no lo lee
     contract_size: 100          # 1 lote = 100 onzas
     lot_step: 0.01              # Incremento mínimo de lote
     min_lot: 0.01
