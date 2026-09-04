@@ -39,11 +39,11 @@ class RiskConfig:
     slippage_points: float = 3.0
     swap_per_lot_per_day: float = -2.0
 
-    # por simbolo
+    # por simbolo — fuente única: config/instruments.yaml (pip_value_usd_per_standard_lot)
     pip_size: dict = field(default_factory=lambda: {"EURUSD": 0.0001, "GBPUSD": 0.0001, "XAUUSD": 0.01})
     contract_size: dict = field(default_factory=lambda: {"EURUSD": 100_000, "GBPUSD": 100_000, "XAUUSD": 100})
-    # USD por pip por lote (SEGUN ELLA: oro 0.01 lote = $1/pip, forex 0.01 lote = $0.10/pip)
-    usd_per_pip_per_lot: dict = field(default_factory=lambda: {"EURUSD": 10.0, "GBPUSD": 10.0, "XAUUSD": 1.0})
+    # USD por pip por lote ESTÁNDAR 1.0 (XAU $100, Forex $10) — 0.01 lote = $1 / $0.10 respectivamente
+    usd_per_pip_per_lot: dict = field(default_factory=lambda: {"EURUSD": 10.0, "GBPUSD": 10.0, "XAUUSD": 100.0})
     spread_default: dict = field(default_factory=lambda: {"EURUSD": 12.0, "GBPUSD": 18.0, "XAUUSD": 35.0})
 
     @staticmethod
@@ -51,6 +51,29 @@ class RiskConfig:
         with open(path) as f:
             d = yaml.safe_load(f)
         c = RiskConfig()
+        # Fuente única para pip/valor: instruments.yaml pip_value_per_lot (0.01 lot base, XAU $1)
+        # NOTA: no usar pip_value_usd_per_standard_lot (XAU 100) porque vol ya está en lotes 0.01 base
+        try:
+            import pathlib
+            inst_path = pathlib.Path(path).parent / "instruments.yaml"
+            if not inst_path.exists():
+                inst_path = pathlib.Path(__file__).parent.parent / "config" / "instruments.yaml"
+            with open(inst_path) as fi:
+                inst = yaml.safe_load(fi) or {}
+            pip_map = {k: v.get("pip_value_per_lot") for k, v in inst.get("instruments", {}).items() if isinstance(v, dict)}
+            for k, v in pip_map.items():
+                if v is not None:
+                    c.usd_per_pip_per_lot[k] = float(v)
+            size_map = {k: v.get("pip_size") for k, v in inst.get("instruments", {}).items() if isinstance(v, dict)}
+            for k, v in size_map.items():
+                if v is not None:
+                    c.pip_size[k] = float(v)
+            contract_map = {k: v.get("contract_size") for k, v in inst.get("instruments", {}).items() if isinstance(v, dict)}
+            for k, v in contract_map.items():
+                if v is not None:
+                    c.contract_size[k] = float(v)
+        except Exception:
+            pass
         ls = d.get("lot_sizing", {})
         c.lots_per_1000_capital = ls.get("lots_per_1000_capital", d.get("lots_per_1000_capital", c.lots_per_1000_capital))
         lim = d.get("limits", {})
