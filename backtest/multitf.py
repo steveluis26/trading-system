@@ -218,8 +218,7 @@ class MultiTFBacktester:
         rr = sig.risk_reward
         if rr < min(c.rr_target) - 0.001:
             return f"R:R {rr:.2f} < {min(c.rr_target)}", 0.0
-        # sizing 1% dinámico (confirmado socia) — 0.022 lotes a SL45 XAU = $100 (1%)
-        # Regla: si vol < 0.01 (SL extremadamente ancho, ej. 1700 pips), rechaza, no fuerza mínimo
+        # sizing 1% dinámico — 0.022 XAU SL45 = $90 0.9% (lot_step 0.01)
         try:
             sl_pips = abs(sig.entry - sig.sl) / c.pip(sig.symbol) if c.pip(sig.symbol) else 0
             upp = c.usd_per_pip(sig.symbol)
