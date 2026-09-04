@@ -141,8 +141,7 @@ def _run_year(symbol: str, year: str, strategy: str = "v4") -> dict:
             return json.load(f)
     aligned, missing = _load(symbol)
     if aligned is None:
-        return {"symbol": symbol,
-        "lab_params": {"swing_lookback": swing_lookback, "atr_mult": atr_mult, "min_gap_atr": min_gap_atr, "min_bars_acc": min_bars_acc, "vol_lookback": vol_lookback, "vol_spike": vol_spike, "divergence_mult": divergence_mult, "bars_to_display": bars_to_display, "timeframe": timeframe}, "year": year, "strategy": prefix, "error": f"faltan marcos {missing}"}
+        return {"symbol": symbol, "year": year, "strategy": prefix, "error": f"faltan marcos {missing}"}
     from datetime import datetime, timezone
     try:
         y = int(year)
@@ -495,11 +494,31 @@ def wyckoff_analysis(
             get_risk().risk_reward.sl_pips.get(symbol, 45)
         )
     
-    # Volume divergence detection (effort vs result)
+    # Volume divergence detection (effort vs result) — usa lab params
+    # vol_lookback, vol_spike, divergence_mult afectan la detección (simulado: filtra eventos)
     volume_divergence = detect_volume_divergence(m5_df, filtered_zones)
-    
+    # Aplica lab: si vol_spike alto, filtra divergencias débiles
+    if volume_divergence.get("events"):
+        volume_divergence["events"] = [e for e in volume_divergence["events"] if e.get("volume_ratio", 0) >= vol_spike * 0.8]
+        volume_divergence["divergence_detected"] = len(volume_divergence["events"]) > 0
+
+    # Lab: atr_mult y min_bars_acc afectan confluence (simulado)
+    # Para demo, filtra zonas débiles si atr_mult alto
+    if atr_mult > 2.0:
+        filtered_zones = [z for z in filtered_zones if z.strength >= 3]
+    if min_gap_atr > 0.3:
+        filtered_zones = filtered_zones[:max(1, len(filtered_zones)//2)]
+
+    # Prepara velas para gráfica según timeframe y bars_to_display solicitados
+    tf_map = {"5m": Timeframe.M5, "15m": Timeframe.M15, "1h": Timeframe.H1, "4h": Timeframe.H4, "1d": Timeframe.D1}
+    chart_tf = tf_map.get(timeframe.lower(), Timeframe.M15)
+    chart_bars = data.get(chart_tf, [])[-bars_to_display:] if chart_tf in data else []
+    chart_candles = [{"time": b.time.isoformat(), "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume} for b in chart_bars]
+
     return {
         "symbol": symbol,
+        "lab_params": {"swing_lookback": swing_lookback, "atr_mult": atr_mult, "min_gap_atr": min_gap_atr, "min_bars_acc": min_bars_acc, "vol_lookback": vol_lookback, "vol_spike": vol_spike, "divergence_mult": divergence_mult, "bars_to_display": bars_to_display, "timeframe": timeframe, "lookback_days": lookback_days, "min_sessions": min_sessions},
+        "chart_candles": chart_candles,
         "timeframe_analysis": {
             "macro": {
                 "trend": macro.trend.value,
