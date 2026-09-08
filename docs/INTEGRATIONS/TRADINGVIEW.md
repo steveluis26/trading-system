@@ -1,0 +1,1 @@
+# TRADINGVIEW — Adaptador previsto, sin implementar. Ver ARCHITECTURE.md
