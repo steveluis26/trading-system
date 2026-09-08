@@ -10,23 +10,22 @@ Este NO es un bot MT5 con una sola conexión. Es una **plataforma de trading mul
 - `docs/PROJECT_STATE.md` es índice/puerta de entrada, apunta a `ESTADO_REAL`, no lo reemplaza aún
 
 ## Arquitectura agnóstica (no elegir tecnología todavía)
-- `MarketDataProvider` → DukascopyCSV / MT5 Live / Synthetic
-- `SignalProvider` → Internal Strategy (SMCMultiTF/Wyckoff) + **TradingView como fuente externa de eventos/alertas** (webhook con validación/idempotencia, no solo señal)
-- `Strategy/AI` → `Portfolio (por user_id/account_id)` → `Risk Engine` → `Execution Engine` → `Event Bus`
-- `ExecutionProvider` → `MQL5` / `MetaApi` / `Python` (intercambiables, ninguno decidido)
-- `NotificationProvider` → `Telegram` (y futuro email/WhatsApp/push) — consumidores de eventos, no `if trade: telegram.send()` en el motor
-- `VisualizationProvider` → `Dashboard` por usuario (USER→Account→MT5/MetaApi+TradingView) — consumidor de `Event Bus` y `Read Model`, no orquestador
-- `Event Bus` requisitos: pub/sub durable, replay, orden, idempotencia — tecnología **no decidida** (InMemory para backtest, Redis Streams/RabbitMQ/Kafka para live se evaluará después)
-- `Database` / `Event Store` + `Read Model` + `PostgreSQL` para trades/features/backtest_runs/model_feedback — **reservado conceptualmente, no implementado** (Fase 3+)
+- `MarketDataProvider` → DukascopyCSV / MT5 Live / Synthetic — `MarketDataProvider` **PREVISTO**
+- `SignalProvider` → Internal Strategy (SMCMultiTF/Wyckoff) + **TradingView como fuente externa de eventos/alertas** (webhook con validación/idempotencia) — `TradingViewWebhookAdapter` **PREVISTO / NO IMPLEMENTADO**
+- `Strategy/AI` → `Portfolio (por user_id/account_id)` **PREVISTO / NO IMPLEMENTADO** → `Risk Engine` → `Execution Engine` → `Event Bus` **DISEÑO / NO IMPLEMENTADO**
+- `ExecutionProvider` → `MQL5` / `MetaApi` / `Python` — `MQL5TerminalAdapter`, `MetaApiCloudAdapter`, `PaperSimulatorAdapter` **PREVISTO / NO IMPLEMENTADO**
+- `NotificationProvider` → `Telegram` (y futuro email/WhatsApp/push) — `TelegramAdapter` **PREVISTO / NO IMPLEMENTADO**, consumidores de eventos, no `if trade: telegram.send()` en el motor
+- `VisualizationProvider` → `Dashboard` por usuario (USER→Account→MT5/MetaApi+TradingView) — `Dashboard` **PREVISTO / NO IMPLEMENTADO** como consumidor de `Event Bus` y `Read Model`, hoy acoplado a `strategies/risk` directo
+- `Event Bus` requisitos: pub/sub durable, replay, orden, idempotencia — tecnología **no decidida** (InMemory para backtest, Redis Streams/RabbitMQ/Kafka para live se evaluará después) — **DISEÑO**
+- `Database` / `Event Store` + `Read Model` + `PostgreSQL` para trades/features/backtest_runs/model_feedback — **RESERVADO / NO IMPLEMENTADO** (Fase 3+)
 
 ## Memoria en Git, no en sesión
-- `docs/ARCHITECTURE.md` → arquitectura objetivo
-- `docs/EVENTS.md` → contrato de eventos con `user_id/account_id/correlation_id`
-- `docs/PROJECT_STATE.md` → foto actual (Fase, estrategia, instrumentos, último backtest, próximo objetivo)
+- `docs/ARCHITECTURE.md` → arquitectura objetivo (ver `CURRENT vs TARGET`)
+- `docs/EVENTS.md` → **TARGET DESIGN — NOT IMPLEMENTED** (contrato con `user_id/account_id/correlation_id`)
+- `docs/PROJECT_STATE.md` → foto actual, apunta a `ESTADO_REAL_ESTRATEGIAS.md` (no lo reemplaza)
 - `docs/DECISIONS/` → ADRs (ej. ADR-001 fuente única pip)
 - `docs/ERRORS/` → `KNOWN_ISSUES.md` / `LESSONS_LEARNED.md`
-- `docs/INTEGRATIONS/{MQL5,MetaApi,Python,TradingView,Telegram}.md` → esqueleto
-- `docs/ROADMAP.md` → Fases 1-4
+- `docs/INTEGRATIONS/{MQL5,MetaApi,Python,TradingView,Telegram}.md` → **PREVISTO / NO IMPLEMENTADO**
 
 **Después de cada trabajo importante, el agente debe:** modificar código → ejecutar tests → validar → **actualizar `PROJECT_STATE.md` y `DECISIONS.md`** — la memoria vive en Git, no en `opencode.db`.
 
@@ -46,14 +45,14 @@ Este NO es un bot MT5 con una sola conexión. Es una **plataforma de trading mul
 ## Estructura de carpetas (objetivo, no implementar todo ahora)
 ```
 docs/
-├── PROJECT_STATE.md
-├── ARCHITECTURE.md
-├── EVENTS.md
+├── PROJECT_STATE.md (índice)
+├── ESTADO_REAL_ESTRATEGIAS.md (auditoría real, autoridad sobre estado)
+├── ARCHITECTURE.md (CURRENT vs TARGET)
+├── EVENTS.md (TARGET DESIGN)
 ├── STRATEGY/{V4.md,RULES.md,RISK.md}
-├── INTEGRATIONS/{MQL5,MetaApi,Python,TradingView,Telegram}.md
+├── INTEGRATIONS/{MQL5,MetaApi,Python,TradingView,Telegram}.md (PREVISTO)
 ├── DECISIONS/ADR-*.md
-├── ERRORS/{KNOWN_ISSUES.md,LESSONS_LEARNED.md}
-└── ROADMAP.md
+└── ERRORS/{KNOWN_ISSUES.md,LESSONS_LEARNED.md}
 ```
 
 ## Stack

@@ -103,9 +103,23 @@ Todo evento lleva `user_id, account_id, symbol, correlation_id`. `RiskEngine` sc
 ```
 `SMC → Signal → Risk → OrderIntent → ExecutionProvider` (la estrategia no sabe quién ejecutó).
 
-## Estado actual (2026-09-03)
+## CURRENT vs TARGET
 
-- **Fase 1 ✓** — backtester honesto + risk + métricas (`core/types` inmutables, `backtest/multitf` pesimista, `measurement/metrics`)
+**CURRENT (hoy):**
+```
+MarketData (CSV) → Strategy (SMCMultiTF/Wyckoff) → Risk (veto) → Backtest (simulator)
+                                                              → Dashboard (acoplado, importa strategies/risk directo)
+```
+`core/types` inmutables, `backtest/multitf` pesimista, `measurement/metrics` — sin Portfolio, sin Event Bus, sin ExecutionProvider, sin multiusuario real.
+
+**TARGET (objetivo):**
+```
+MarketData → Strategy → Portfolio → Risk → ExecutionProvider → Event Bus → Database/Dashboard/Telegram
+```
+Con `MQL5/MetaApi/Python` intercambiables, `TradingViewWebhookAdapter`, `Portfolio` por `account_id`, `Event Bus` durable, `PostgreSQL`.
+
+**Estado actual (2026-09-03):**
+- **Fase 1 ✓** — backtester honesto + risk + métricas
 - **Fase 2-4 ↻** — MarketData live, Portfolio, Event Bus durable, Execution MQL5/MetaApi, Telegram, PostgreSQL → **reservados, no implementados**
 - **Integrations esqueleto:** `docs/INTEGRATIONS/*.md` con `MetaApi rate limit, MQL5 ZeroMQ, TradingView webhook sin garantía` (`README:48`)
 

@@ -4,9 +4,12 @@
 
 ## Estado actual
 - **Fase:** `Fase 1 ✓` (backtester honesto + risk + métricas) · `Fase 2-4 ↻` (MarketData live, Portfolio, Event Bus, Execution MQL5/MetaApi, Telegram, PostgreSQL reservados)
-- **Estrategia:** `v4 SMC` (activa en demo `44tr PF0.39`) y `v2 Wyckoff` (`PENDING`, 12tr, sin volumen/TP fib real)
-- **Sizing:** `1% dinámico` con `pip_value_usd_per_standard_lot` (XAU 100) → `XAU SL45 0.02 / $90 0.90%` (lot_step 0.01), `GBP SL22 0.45 / $99` — veto `vol<0.01` rechaza SL extremo
-- **Instrumentos:** `XAUUSD, EURUSD, GBPUSD` · `data/raw` 29 CSV evtradelabs 2020-2026 (29, `XAU 5m 449k`) · `data/cache` separado por `strategy` (`bt_v4_*`, `bt_wyckoff_*`)
+- **Estrategia:** `v4 SMC` (activa en demo `44tr PF0.39` con 1% dinámico) y `v2 Wyckoff` (`PENDING`, 12tr, sin volumen/TP fib real)
+- **Sizing — 2 stacks, no 1% único:**
+  - `Stack legacy / dashboard` `backtest/multitf.py:222` → `1% dinámico` `vol=(equity*0.01)/(SL*upp)` con veto `vol<0.01` (XAU SL45 0.02 / $90 0.90%, GBP SL22 0.45 / $99) — **activo**
+  - `Stack nuevo` `backtester/config_loader.py` + `backtester/position_simulator.py` → `lots_per_1000: 0.01` (fijo, `risk.yaml:8 mode: fixed_lot`) — **aún declara fijo, no 1%**
+  - `Config` `config/risk.yaml:5` sigue `mode: fixed_lot` — no es 1% canónico global aún. Por eso `PROJECT_STATE` no puede decir `1% único`.
+- **Instrumentos:** `XAUUSD, EURUSD, GBPUSD` · `data/raw` 29 CSV evtradelabs 2020-2026 (`XAU 5m 449k`) · `data/cache` separado por `strategy` (`bt_v4_*`, `bt_wyckoff_*`)
 
 ## Último backtest (v4, 2 años 2024-2026, sizing 1% limpio)
 - `XAU 44tr PF0.39 -1471$ win 20% DD14.7%` · `EUR 16tr PF0.02 -2557$` · `GBP 14tr PF0.006 -2844$` → `INSUFICIENTE <100` (ruido), `SIN EDGE` (PF<1.2, Sharpe<1)

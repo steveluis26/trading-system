@@ -1,6 +1,6 @@
-# EVENTS — Contrato de eventos (diseño, no implementación completa)
+# EVENTS — TARGET DESIGN — NOT IMPLEMENTED (contrato, no API existente)
 
-> Event Bus requisitos: **pub/sub durable, replay, orden, idempotencia** — tecnología **no decidida** (InMemory para backtest, Redis Streams/RabbitMQ/Kafka para live se evaluará después). No decidir ahora.
+> **TARGET DESIGN — NOT IMPLEMENTED** — Event Bus requisitos: **pub/sub durable, replay, orden, idempotencia** — tecnología **no decidida** (InMemory para backtest, Redis Streams/RabbitMQ/Kafka para live se evaluará después). No decidir ahora.
 
 ## Catálogo
 
@@ -46,6 +46,21 @@ Entrada: 1.16842 SL: 1.16692 TP: 1.17142 Riesgo: 1% Estrategia: SMC V4 Cuenta: *
 señal → contexto → features → predicción → decisión → ejecución → resultado → feedback → modelo
 ```
 Conservar `Signal.context` + `Position` + `TradeCompleted` en `PostgreSQL` (`trades, trade_features, backtest_runs`) para futuro `meta-labeling`.
+
+## Actual vs Objetivo
+
+| Concepto | Actual | Objetivo |
+|---|---|---|
+| `Signal` | ✅ `core/types.py:26` existe | conservar |
+| `RiskDecision` | ✅ existe | conservar/evolucionar a `RiskApproved/Rejected` |
+| `Position` | ✅ existe | evolucionar (añadir `user_id/account_id`) |
+| `SignalGenerated` | ❌ futuro | `Strategy` emite |
+| `RiskApproved/Rejected` | ❌ futuro | `RiskEngine` valida |
+| `OrderIntent/Submitted/Filled/Rejected` | ❌ futuro | `ExecutionProvider` |
+| `PositionOpened/Modified/Closed` | ❌ futuro | `Execution` |
+| `TradeCompleted` | ❌ futuro | `PositionClosed` final |
+| `ModelPrediction/Feedback` | ❌ futuro | `LightGBM` Fase 3 |
+| `Event Bus` | ❌ futuro | `InMemory` backtest, durable para live |
 
 ## Estado hoy
 - `core/types.py` tiene `Signal/RiskDecision/Position` (no `Order` aún) — `execution/__init__.py` vacío
