@@ -34,8 +34,8 @@ def test_sizing_1pct_via_backtest():
     cfg = RiskConfig.from_yaml()
     inst = yaml.safe_load(open(Path("config/instruments.yaml")))
     upp_yaml = inst["pip_value_usd_per_standard_lot"]["XAUUSD"]
-    assert cfg.usd_per_pip("XAUUSD") == upp_yaml, f"pip debe leer de yaml {upp_yaml} (per std lot 100)"
-    # XAU 45 pips con upp 100 -> vol 0.02 (90$ 0.9% con lot_step 0.01)
+    assert cfg.usd_per_pip("XAUUSD") == upp_yaml, f"pip {cfg.usd_per_pip('XAUUSD')} debe leer de yaml {upp_yaml} (per std lot 1.0 per MT5 spec)"
+    # XAU 45 pips con upp 1.0 -> vol 2.22 (99.9$ 1.0% con lot_step 0.01) — MT5 spec captura Contract 100 Tick 0.01 Tick value 1
     exp_vol = round((10000*0.01)/(45*upp_yaml), 2)
     strat = DummyStrategy()
     bt = MultiTFBacktester(strat, cfg, initial_equity=10000)
@@ -43,11 +43,11 @@ def test_sizing_1pct_via_backtest():
     assert len(res.positions) > 0 or len(res.rejections) > 0, "debe intentar abrir al menos 1"
     if res.positions:
         vol = res.positions[0].volume
-        assert abs(vol - exp_vol) < 0.01, f"vol {vol} debe ser {exp_vol} (1% dinámico desde yaml standard lot), no 0.10 fijo"
+        assert abs(vol - exp_vol) < 0.05, f"vol {vol} debe ser {exp_vol} (1% dinámico desde yaml, XAU 1.0)"
         sl_pips = 45
         upp = cfg.usd_per_pip("XAUUSD")
         risk_pct = sl_pips * vol * upp / 10000 * 100
-        assert 0.8 < risk_pct < 1.2, f"risk {risk_pct}% debe ser ~1% (con 0.02 da 0.9% por redondeo)"
+        assert 0.8 < risk_pct < 1.2, f"risk {risk_pct}% debe ser ~1% (2.22*45*1=99.9)"
     else:
         # si no hay posiciones, debe ser por SL muy ancho, no por sizing fijo
         # verifica que el motivo no sea volumen fijo
